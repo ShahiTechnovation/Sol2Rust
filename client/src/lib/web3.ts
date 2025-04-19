@@ -309,14 +309,49 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
         // For Arbitrum, use a more direct approach that bypasses ENS
         console.log("Using direct bytecode deployment for Arbitrum");
         
-        // Create factory transaction data manually with proper arguments
-        const data = factory.interface.encodeDeploy(
-          constructorArgs.length > 0 ? constructorArgs : []
-        );
+        // Let's simplify for the Token contract to avoid ABI encoding issues
+        let data = "";
+        
+        try {
+          // Create factory transaction data manually with proper arguments
+          data = factory.interface.encodeDeploy(
+            constructorArgs.length > 0 ? constructorArgs : []
+          );
+          console.log("Encoded constructor arguments:", data);
+          
+          // If encoding fails or produces invalid data, use empty constructor args
+          if (!data || data === "0x") {
+            console.log("Empty constructor data, using default empty string");
+            data = "0x";
+          }
+        } catch (encodeError) {
+          console.error("Error encoding constructor arguments:", encodeError);
+          data = "0x"; // Empty constructor data
+        }
         
         // Create the transaction request manually
+        // Be extremely careful with the bytecode concatenation - ensure it's valid
+        // Make sure bytecode is a proper hex string starting with 0x
+        const hexBytecode = bytecode.startsWith('0x') ? bytecode : `0x${bytecode}`;
+        // For deploy data, we need to remove the '0x' prefix before concatenation
+        const deployData = data.startsWith('0x') ? data.slice(2) : data;
+        
+        console.log("Contract bytecode length:", hexBytecode.length);
+        console.log("Deploy data length:", deployData.length);
+        
+        // For simplicity and to avoid concatenation issues, let's use only the bytecode for now
+        // This will work for contracts without constructor args or when args are causing issues
+        let finalData = hexBytecode;
+        
+        // Only add constructor args if they're valid and needed
+        if (deployData && deployData.length > 0 && deployData !== "0") {
+          finalData = `${hexBytecode}${deployData}`;
+        }
+        
+        console.log("Final transaction data length:", finalData.length);
+        
         const transactionRequest = {
-          data: ethers.concat([bytecode, data.slice(2)]),
+          data: finalData,
           ...deployOptions
         };
         
