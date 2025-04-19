@@ -16,9 +16,9 @@ interface DeploymentModalProps {
 }
 
 export function DeploymentModal({ isOpen, onClose, walletState, rustCode }: DeploymentModalProps) {
-  const [contractName, setContractName] = useState("SimpleStorage");
-  const [constructorArgs, setConstructorArgs] = useState('{"initialValue": "42"}');
-  const [gasLimit, setGasLimit] = useState(250000);
+  const [contractName, setContractName] = useState("Token");
+  const [constructorArgs, setConstructorArgs] = useState('["My Token", "MTK", "8", "1000"]');
+  const [gasLimit, setGasLimit] = useState(3000000);
   
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
@@ -104,9 +104,12 @@ export function DeploymentModal({ isOpen, onClose, walletState, rustCode }: Depl
               id="constructor-args" 
               value={constructorArgs}
               onChange={(e) => setConstructorArgs(e.target.value)}
-              placeholder='{"initialValue": "42"}'
+              placeholder='["My Token", "MTK", "8", "1000"]'
               rows={3}
             />
+            <p className="text-xs text-gray-500 mt-1">
+              For Token contract: ["name", "symbol", "decimals", "initialSupply"]
+            </p>
           </div>
           
           <div className="space-y-2">

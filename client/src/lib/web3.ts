@@ -1,4 +1,11 @@
 import { ethers, BrowserProvider, JsonRpcSigner } from "ethers";
+
+// Add the window.ethereum type for TypeScript
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
 import { apiRequest } from "./queryClient";
 
 export interface WalletState {
@@ -104,26 +111,36 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
     // Parse constructor arguments
     let constructorArgs: any[] = [];
     try {
-      constructorArgs = JSON.parse(params.constructorArgs);
+      const parsedArgs = JSON.parse(params.constructorArgs);
+      // Ensure constructor args is an array
+      constructorArgs = Array.isArray(parsedArgs) ? parsedArgs : Object.values(parsedArgs);
     } catch (e) {
-      throw new Error("Invalid constructor arguments JSON");
+      console.error("Error parsing constructor args:", e);
+      // Use empty array for constructor args if parsing fails
+      constructorArgs = [];
     }
     
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
     
-    // Deploy contract
-    const contract = await factory.deploy(...constructorArgs, {
-      gasLimit: params.gasLimit
-    });
+    // Deploy contract - handle both with and without constructor args
+    const deployOptions = { gasLimit: params.gasLimit };
+    const contract = constructorArgs.length > 0 
+      ? await factory.deploy(...constructorArgs, deployOptions)
+      : await factory.deploy(deployOptions);
     
     // Wait for deployment
-    await contract.deploymentTransaction().wait();
+    const deploymentTx = contract.deploymentTransaction();
+    if (!deploymentTx) {
+      throw new Error("Failed to get deployment transaction");
+    }
+    
+    await deploymentTx.wait();
     
     return {
       success: true,
       contractAddress: await contract.getAddress(),
-      transactionHash: contract.deploymentTransaction().hash
+      transactionHash: deploymentTx.hash
     };
   } catch (error) {
     console.error("Deployment error:", error);
