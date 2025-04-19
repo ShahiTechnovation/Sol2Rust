@@ -191,8 +191,98 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
         // Examine the abi to properly format the constructor arguments
         const constructorAbiItem = abi.find((item: any) => item.type === 'constructor');
         
-        // Process constructor arguments based on their types
-        if (constructorAbiItem && constructorAbiItem.inputs) {
+        // For tokens, let's provide a completely fixed set of arguments 
+        // based on the ABI structure rather than trying to parse user input
+        if (params.contractName.toLowerCase().includes('token')) {
+          console.log("Detected a Token contract, using fixed argument structure");
+          
+          // Define default values for token contract
+          const defaultArgs = {
+            name: "MyToken",
+            symbol: "MTK",
+            decimals: 18,
+            totalSupply: 1000000
+          };
+          
+          // Create correctly typed arguments based on ABI
+          const typedArgs: any[] = [];
+          
+          if (constructorAbiItem && constructorAbiItem.inputs) {
+            constructorAbiItem.inputs.forEach((input: any, index: number) => {
+              const inputType = input.type || '';
+              const inputName = input.name || '';
+              
+              console.log(`Processing input: ${inputName} (${inputType}) at index ${index}`);
+              
+              // Map user input to correctly typed values
+              if (inputType.includes('string')) {
+                // For string types, use string values from user input or defaults
+                if (index === 0 && typeof constructorArgs[0] === 'string' && constructorArgs[0].trim()) {
+                  typedArgs.push(constructorArgs[0].trim());
+                } else if (index === 1 && typeof constructorArgs[1] === 'string' && constructorArgs[1].trim()) {
+                  typedArgs.push(constructorArgs[1].trim());
+                } else if (inputName.includes('name')) {
+                  typedArgs.push(defaultArgs.name);
+                } else if (inputName.includes('symbol')) {
+                  typedArgs.push(defaultArgs.symbol);
+                } else {
+                  typedArgs.push("");
+                }
+              } 
+              else if (inputType.includes('uint')) {
+                // For number types, ensure we have valid numbers
+                let numValue = 0;
+                
+                if (typeof constructorArgs[index] === 'number') {
+                  numValue = constructorArgs[index];
+                } 
+                else if (typeof constructorArgs[index] === 'string') {
+                  numValue = parseInt(constructorArgs[index], 10) || 0;
+                  if (isNaN(numValue)) numValue = 0;
+                }
+                
+                // Choose appropriate defaults based on parameter name
+                if (inputName.includes('decimal')) {
+                  // Decimals usually 18 for ERC20, but allow user override if valid
+                  numValue = numValue || defaultArgs.decimals;
+                } 
+                else if (inputName.includes('supply') || inputName.includes('amount')) {
+                  // Supply usually a large number
+                  numValue = numValue || defaultArgs.totalSupply;
+                }
+                
+                typedArgs.push(numValue);
+              } 
+              else if (inputType.includes('address')) {
+                // For address types, use zero address as default or user input if valid
+                if (typeof constructorArgs[index] === 'string' && 
+                    constructorArgs[index].startsWith('0x') && 
+                    constructorArgs[index].length === 42) {
+                  typedArgs.push(constructorArgs[index]);
+                } else {
+                  typedArgs.push('0x0000000000000000000000000000000000000000');
+                }
+              } 
+              else if (inputType.includes('bool')) {
+                // For boolean types
+                if (typeof constructorArgs[index] === 'boolean') {
+                  typedArgs.push(constructorArgs[index]);
+                } else {
+                  typedArgs.push(false);
+                }
+              } 
+              else {
+                // For any other type, use a safe default
+                typedArgs.push(0);
+              }
+            });
+          }
+          
+          console.log("Final correctly typed arguments:", typedArgs);
+          constructorArgs = typedArgs;
+        }
+        // For other contract types, process arguments based on their types
+        else if (constructorAbiItem && constructorAbiItem.inputs) {
           const processedArgs = constructorArgs.map((arg: any, index: number) => {
             const inputType = constructorAbiItem.inputs[index]?.type || '';
             console.log(`Processing arg[${index}]:`, arg, "of type:", inputType);
@@ -203,13 +293,11 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
               if (arg === '' || isNaN(Number(arg))) {
                 return 0; // Default to 0 for empty numeric fields
               }
-              return arg; // Will be automatically converted by ethers
+              return Number(arg); // Convert to number
             }
-            // Special handling for decimals - always make sure it's a number
-            if (inputType.includes('uint') && params.contractName.toLowerCase().includes('token') && 
-                index === 2 && typeof arg === 'string') {
-              // This is likely the decimals parameter for a token
-              return Number(arg) || 8; // Default to 8 if not a valid number
+            else if (inputType.includes('address') && typeof arg === 'string' && !arg.startsWith('0x')) {
+              // If supposed to be an address but doesn't start with 0x
+              return '0x0000000000000000000000000000000000000000';
             }
             return arg;
           });
