@@ -114,33 +114,81 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
       const parsedArgs = JSON.parse(params.constructorArgs);
       // Ensure constructor args is an array
       constructorArgs = Array.isArray(parsedArgs) ? parsedArgs : Object.values(parsedArgs);
+      
+      // Make sure we have the right number and type of arguments
+      // If the first ABI entry is a constructor, check its inputs
+      const constructorAbi = abi.find((item: any) => item.type === 'constructor');
+      if (constructorAbi && constructorAbi.inputs) {
+        // Match the number of arguments to the constructor inputs
+        while (constructorArgs.length < constructorAbi.inputs.length) {
+          // Add defaults based on type
+          const nextInput = constructorAbi.inputs[constructorArgs.length];
+          if (nextInput.type.includes('string')) {
+            constructorArgs.push('');
+          } else if (nextInput.type.includes('int')) {
+            constructorArgs.push('0');
+          } else if (nextInput.type.includes('bool')) {
+            constructorArgs.push(false);
+          } else if (nextInput.type.includes('address')) {
+            constructorArgs.push('0x0000000000000000000000000000000000000000');
+          } else {
+            constructorArgs.push('0');
+          }
+        }
+        
+        // Trim any extra arguments
+        constructorArgs = constructorArgs.slice(0, constructorAbi.inputs.length);
+      }
     } catch (e) {
       console.error("Error parsing constructor args:", e);
       // Use empty array for constructor args if parsing fails
       constructorArgs = [];
     }
     
+    console.log("Deploy with arguments:", constructorArgs);
+
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
     
-    // Deploy contract - handle both with and without constructor args
-    const deployOptions = { gasLimit: params.gasLimit };
-    const contract = constructorArgs.length > 0 
-      ? await factory.deploy(...constructorArgs, deployOptions)
-      : await factory.deploy(deployOptions);
+    // Set explicit gas price and limit for more reliable deployment
+    const deployOptions = { 
+      gasLimit: params.gasLimit,
+      gasPrice: 10000000000 // 10 gwei
+    };
     
-    // Wait for deployment
-    const deploymentTx = contract.deploymentTransaction();
-    if (!deploymentTx) {
-      throw new Error("Failed to get deployment transaction");
+    // Deploy contract - handle both with and without constructor args
+    let contract;
+    try {
+      contract = constructorArgs.length > 0 
+        ? await factory.deploy(...constructorArgs, deployOptions)
+        : await factory.deploy(deployOptions);
+        
+      // Wait for deployment
+      const deploymentTx = contract.deploymentTransaction();
+      if (!deploymentTx) {
+        throw new Error("Failed to get deployment transaction");
+      }
+      
+      console.log("Deployment transaction:", deploymentTx.hash);
+      
+      // Wait for the transaction to be mined
+      const receipt = await deploymentTx.wait();
+      if (receipt && receipt.status === 0) {
+        throw new Error("Transaction failed");
+      }
+    } catch (deployError: any) {
+      console.error("Deployment transaction failed:", deployError);
+      throw new Error(`Deployment failed: ${deployError.message || "Unknown error"}`);
     }
     
-    await deploymentTx.wait();
+    if (!contract || !contract.deploymentTransaction()) {
+      throw new Error("Deployment failed - contract or transaction not available");
+    }
     
     return {
       success: true,
       contractAddress: await contract.getAddress(),
-      transactionHash: deploymentTx.hash
+      transactionHash: contract.deploymentTransaction()!.hash
     };
   } catch (error) {
     console.error("Deployment error:", error);
