@@ -187,14 +187,54 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
       
       // For Arbitrum specifically, avoid ENS lookups which can cause issues
       if (params.chainId === 42161 || params.chainId === 421613) {
-        // We don't want to use ENS on Arbitrum, so we'll use a direct deploy method
-        const deployTransaction = factory.getDeployTransaction(
-          ...(constructorArgs.length > 0 ? constructorArgs : []),
-          deployOptions
+        // Process constructor arguments properly for Token contracts
+        // Examine the abi to properly format the constructor arguments
+        const constructorAbiItem = abi.find((item: any) => item.type === 'constructor');
+        
+        // Process constructor arguments based on their types
+        if (constructorAbiItem && constructorAbiItem.inputs) {
+          const processedArgs = constructorArgs.map((arg: any, index: number) => {
+            const inputType = constructorAbiItem.inputs[index]?.type || '';
+            console.log(`Processing arg[${index}]:`, arg, "of type:", inputType);
+            
+            // Handle different types specially
+            if (inputType.includes('uint') && typeof arg === 'string') {
+              // If arg is a string but should be a number
+              if (arg === '' || isNaN(Number(arg))) {
+                return 0; // Default to 0 for empty numeric fields
+              }
+              return arg; // Will be automatically converted by ethers
+            }
+            // Special handling for decimals - always make sure it's a number
+            if (inputType.includes('uint') && params.contractName.toLowerCase().includes('token') && 
+                index === 2 && typeof arg === 'string') {
+              // This is likely the decimals parameter for a token
+              return Number(arg) || 8; // Default to 8 if not a valid number
+            }
+            return arg;
+          });
+          
+          console.log("Processed constructor arguments:", processedArgs);
+          constructorArgs = processedArgs;
+        }
+        
+        // For Arbitrum, use a more direct approach that bypasses ENS
+        console.log("Using direct bytecode deployment for Arbitrum");
+        
+        // Create factory transaction data manually with proper arguments
+        const data = factory.interface.encodeDeploy(
+          constructorArgs.length > 0 ? constructorArgs : []
         );
         
-        // Send the transaction directly without ENS resolution
-        const tx = await signer.sendTransaction(deployTransaction);
+        // Create the transaction request manually
+        const transactionRequest = {
+          data: ethers.concat([bytecode, data.slice(2)]),
+          ...deployOptions
+        };
+        
+        // Send transaction directly
+        console.log("Sending transaction:", transactionRequest);
+        const tx = await signer.sendTransaction(transactionRequest);
         console.log("Deployment transaction sent:", tx.hash);
         
         // Wait for the transaction to be mined
