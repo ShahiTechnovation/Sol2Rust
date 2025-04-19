@@ -16,11 +16,12 @@ export interface WalletState {
 }
 
 export const networks = [
-  { id: 1, name: "Ethereum", value: "ethereum", explorer: "https://etherscan.io/address/" },
-  { id: 137, name: "Polygon", value: "polygon", explorer: "https://polygonscan.com/address/" },
-  { id: 10, name: "Optimism", value: "optimism", explorer: "https://optimistic.etherscan.io/address/" },
-  { id: 42161, name: "Arbitrum", value: "arbitrum", explorer: "https://arbiscan.io/address/" },
-  { id: 8453, name: "Base", value: "base", explorer: "https://basescan.org/address/" }
+  { id: 1, name: "Ethereum", value: "ethereum", explorer: "https://etherscan.io/address/", deployDirectly: true },
+  { id: 137, name: "Polygon", value: "polygon", explorer: "https://polygonscan.com/address/", deployDirectly: true },
+  { id: 10, name: "Optimism", value: "optimism", explorer: "https://optimistic.etherscan.io/address/", deployDirectly: true },
+  { id: 42161, name: "Arbitrum", value: "arbitrum", explorer: "https://arbiscan.io/address/", deployDirectly: true },
+  { id: 8453, name: "Base", value: "base", explorer: "https://basescan.org/address/", deployDirectly: true },
+  { id: 421613, name: "Arbitrum Goerli", value: "arbitrum-goerli", explorer: "https://goerli.arbiscan.io/address/", deployDirectly: true }
 ];
 
 export async function connectWallet(): Promise<WalletState> {
@@ -150,31 +151,90 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
     // Create contract factory
     const factory = new ethers.ContractFactory(abi, bytecode, signer);
     
-    // Set explicit gas price and limit for more reliable deployment
-    const deployOptions = { 
-      gasLimit: params.gasLimit,
-      gasPrice: 10000000000 // 10 gwei
+    // Set deployment options based on the network
+    const network = networks.find(n => n.id === params.chainId);
+    
+    // Base deployment options
+    let deployOptions: any = { 
+      gasLimit: params.gasLimit
     };
+    
+    // Different networks have different requirements
+    if (params.chainId === 42161 || params.chainId === 421613) {
+      // Arbitrum-specific settings
+      deployOptions = {
+        ...deployOptions,
+        // Arbitrum doesn't use gasPrice, it uses maxFeePerGas and maxPriorityFeePerGas
+        maxFeePerGas: ethers.parseUnits('0.1', 'gwei'),
+        maxPriorityFeePerGas: ethers.parseUnits('0.01', 'gwei')
+      };
+    } else {
+      // Default for other networks
+      deployOptions.gasPrice = 10000000000; // 10 gwei
+    }
+    
+    console.log(`Deploying on ${network?.name || 'Unknown Network'} with options:`, deployOptions);
     
     // Deploy contract - handle both with and without constructor args
     let contract;
     try {
-      contract = constructorArgs.length > 0 
-        ? await factory.deploy(...constructorArgs, deployOptions)
-        : await factory.deploy(deployOptions);
+      // Get the current nonce to avoid nonce errors
+      const nonce = await signer.getNonce();
+      console.log("Using nonce:", nonce);
+      
+      // Update deployment options with nonce
+      deployOptions.nonce = nonce;
+      
+      // For Arbitrum specifically, avoid ENS lookups which can cause issues
+      if (params.chainId === 42161 || params.chainId === 421613) {
+        // We don't want to use ENS on Arbitrum, so we'll use a direct deploy method
+        const deployTransaction = factory.getDeployTransaction(
+          ...(constructorArgs.length > 0 ? constructorArgs : []),
+          deployOptions
+        );
         
-      // Wait for deployment
-      const deploymentTx = contract.deploymentTransaction();
-      if (!deploymentTx) {
-        throw new Error("Failed to get deployment transaction");
-      }
-      
-      console.log("Deployment transaction:", deploymentTx.hash);
-      
-      // Wait for the transaction to be mined
-      const receipt = await deploymentTx.wait();
-      if (receipt && receipt.status === 0) {
-        throw new Error("Transaction failed");
+        // Send the transaction directly without ENS resolution
+        const tx = await signer.sendTransaction(deployTransaction);
+        console.log("Deployment transaction sent:", tx.hash);
+        
+        // Wait for the transaction to be mined
+        const receipt = await tx.wait();
+        if (receipt && receipt.status === 0) {
+          throw new Error("Transaction failed");
+        }
+        
+        // Create a contract instance from the deployed contract
+        const address = receipt?.contractAddress;
+        if (!address) {
+          throw new Error("Deployment failed - contract address not available");
+        }
+        
+        contract = new ethers.Contract(address, abi, signer);
+        
+        // Manually create a deployment transaction property
+        Object.defineProperty(contract, "deploymentTransaction", {
+          value: () => tx,
+          writable: false
+        });
+      } else {
+        // Standard deployment for other networks
+        contract = constructorArgs.length > 0 
+          ? await factory.deploy(...constructorArgs, deployOptions)
+          : await factory.deploy(deployOptions);
+          
+        // Wait for deployment
+        const deploymentTx = contract.deploymentTransaction();
+        if (!deploymentTx) {
+          throw new Error("Failed to get deployment transaction");
+        }
+        
+        console.log("Deployment transaction:", deploymentTx.hash);
+        
+        // Wait for the transaction to be mined
+        const receipt = await deploymentTx.wait();
+        if (receipt && receipt.status === 0) {
+          throw new Error("Transaction failed");
+        }
       }
     } catch (deployError: any) {
       console.error("Deployment transaction failed:", deployError);

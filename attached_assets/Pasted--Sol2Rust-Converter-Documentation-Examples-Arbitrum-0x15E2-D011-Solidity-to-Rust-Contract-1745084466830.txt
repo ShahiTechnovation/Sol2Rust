@@ -1,0 +1,77 @@
+
+Sol2Rust
+Converter
+Documentation
+Examples
+
+Arbitrum
+0x15E2...D011
+Solidity to Rust Contract Converter
+Enter your Solidity smart contract code and convert it to Rust for deployment on various blockchain networks.
+
+Convert to Rust
+Deploy Contract
+Load Example
+Clear
+Solidity Source
+Input your Solidity smart contract
+252627282930313233343536373839404142434445
+    // Read message from contract
+    function readMessage() external view returns (string memory) {
+        return message;
+    }
+}
+623contract Sample is KRNL {    {
+Rust Output
+Converted
+
+123456789101112131415161718192021
+#[cfg(not(feature = "std"))]
+use ink_lang as ink;
+
+#[ink::contract]
+mod sample {
+    use ink_prelude::{
+        string::String,
+        vec::Vec,
+    };
+    use ink_storage::{
+
+Features
+Smart Code Conversion
+AI-powered conversion from Solidity to Rust with support for common contract patterns.
+
+Wallet Integration
+Connect your favorite wallet (MetaMask, etc.) to deploy converted contracts directly.
+
+Multi-Chain Support
+Deploy your converted contracts on Ethereum, Polygon, Optimism, Arbitrum, and more.
+
+GitHub
+Twitter
+© 2023 Sol2Rust. All rights reserved.
+
+This is a temporary preview. Deploy your app before sharing to keep it live.
+
+Deploy Contract
+You're about to deploy your converted Rust contract to Arbitrum. This will require a transaction from your connected wallet.
+
+Contract Name
+Tokenqwe3ret5r6t
+Constructor Arguments (JSON)
+["Tokenqwe3ret5r6t", "MeTK", "8", "1000"]
+For Token contract: ["name", "symbol", "decimals", "initialSupply"]
+
+Gas Limit
+Estimated: 210,000
+3000000
+Deployment failed
+Deployment failed: missing revert data (action="call", data=null, reason=null, transaction={ "data": "0x0178b8bfc6e56480eee83dbee7b7e7d204f38ff3c36cf7a6576fbf14b3537ec5304a0574", "to": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" }, invocation=null, revert=null, code=CALL_EXCEPTION, version=6.13.5)
+Cancel
+Deploy Contract
+Close
+[plugin:runtime-error-plugin] (unknown runtime error)
+    at sendError (https://bd66094f-2ee4-449b-8df1-8c8900ce7fcf-00-1gty34tks6qk0.janeway.replit.dev/:55:13)
+    at https://bd66094f-2ee4-449b-8df1-8c8900ce7fcf-00-1gty34tks6qk0.janeway.replit.dev/:69:3
+Click outside, press Esc key, or fix the code to dismiss.
+You can also disable this overlay by setting server.hmr.overlay to false in vite.config.js.
