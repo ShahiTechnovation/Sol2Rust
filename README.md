@@ -8,7 +8,6 @@ A Web3 utility tool that helps developers convert Solidity smart contracts into 
 - 🎯 Designed for Arbitrum Stylus deployments
 - ⚡ Built with Vite, TailwindCSS, and TypeScript
 - 🔌 Wallet integration ready
-- 🧪 Replit-compatible for live in-browser previews
+- 🧪 Live in-browser previews
 
-## 📦 Project Structure
 
