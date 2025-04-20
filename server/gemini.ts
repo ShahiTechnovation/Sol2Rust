@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Initialize the Gemini API with your API key
-const apiKey = "AIzaSyDcGpe9on3ubnD5e1SfFkhqkKXsme9QMw8"; // Using the provided API key
+const apiKey = "AIzaSyCcS2XxNyoHuVTxd7uTZq-qm8DpVeo-x10"; // Using the provided API key
 const genAI = new GoogleGenerativeAI(apiKey);
 
 // Function to convert Solidity to Rust using Gemini API

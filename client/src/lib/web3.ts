@@ -194,7 +194,7 @@ export async function deployContract(params: DeploymentParams): Promise<Deployme
         );
         
         // Send the transaction directly without ENS resolution
-        const tx = await signer.sendTransaction(deployTransaction);
+        const tx = await signer.sendTransaction(deployTransaction as ethers.TransactionRequest);
         console.log("Deployment transaction sent:", tx.hash);
         
         // Wait for the transaction to be mined
